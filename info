@@ -1,0 +1,13 @@
+.\trade_venv\Scripts\activate
+
+.\trade_venv\Scripts\activate
+
+python main.py --- for running full code
+
+python clean_scraper.py --- to run only scraping
+
+
+git config --global user.email "asatishubham@gmail.com"
+ git config --global user.name "asatishubham@gmail.com"
+
+ git remote add origin https://github.com/ShubhamAsatiTrading/CheckCurrentVolume.git
