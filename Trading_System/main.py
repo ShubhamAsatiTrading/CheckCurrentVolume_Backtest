@@ -6,7 +6,7 @@ import streamlit as st
 import subprocess
 import os
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import json
 import threading
@@ -287,15 +287,23 @@ class TradingSystem:
             Logger.log_to_file(f"Error creating Kite instance: {e}", "ERROR")
             raise
     
+    # Add this to TradingSystem.run_individual_function in main.py
+
     @staticmethod
     def run_individual_function(module_name, function_name, **kwargs):
-        """Run individual trading system function"""
+        """Run individual trading system function with error handling"""
         try:
-            # Import module
+            # Import module with Streamlit error handling
             try:
                 module = __import__(module_name)
             except ImportError as e:
                 return False, f"❌ Module {module_name} not found: {e}"
+            except Exception as e:
+                # Catch Streamlit page_config errors
+                if "set_page_config" in str(e):
+                    return False, f"❌ {module_name} has Streamlit UI code that conflicts with main.py. Please fix the module by wrapping Streamlit code in 'if __name__ == \"__main__\"' block."
+                else:
+                    return False, f"❌ Error importing {module_name}: {e}"
             
             # Get function
             try:
@@ -303,12 +311,19 @@ class TradingSystem:
             except AttributeError as e:
                 return False, f"❌ Function {function_name} not found in {module_name}: {e}"
             
-            # Execute function
-            result = function(**kwargs)
-            return True, f"✅ {module_name}.{function_name} completed successfully"
+            # Execute function with error handling
+            try:
+                result = function(**kwargs)
+                return True, f"✅ {module_name}.{function_name} completed successfully"
+            except Exception as e:
+                # Handle specific Streamlit errors
+                if "set_page_config" in str(e) or "ScriptRunContext" in str(e):
+                    return False, f"❌ {module_name}.{function_name} has Streamlit conflicts. Please fix the module structure."
+                else:
+                    return False, f"❌ Error executing {module_name}.{function_name}: {e}"
             
         except Exception as e:
-            error_msg = f"❌ Error in {module_name}.{function_name}: {e}"
+            error_msg = f"❌ Unexpected error in {module_name}.{function_name}: {e}"
             Logger.log_to_file(error_msg, "ERROR")
             return False, error_msg
     
@@ -1231,6 +1246,9 @@ def main():
                         st.error(message)
         
         # Historical Data Download
+        # Replace the Historical Data Download section in main.py with this:
+
+        # Historical Data Download - FIXED VERSION
         with st.expander("📈 Historical Data Download", expanded=False):
             st.markdown("""
             <div class="function-card">
@@ -1243,23 +1261,22 @@ def main():
             col1, col2 = st.columns(2)
             with col1:
                 symbol_file = st.text_input("Symbol Names File", value="symbols.txt", key="hist_symbol_file")
-                start_date = st.date_input("Start Date", value=datetime(2020, 1, 1).date(), key="hist_start_date")
+                days_back = st.number_input("Days Back", min_value=1, max_value=3650, value=365, key="hist_days_back")
                 max_workers = st.number_input("Max Workers", min_value=1, max_value=4, value=3, key="hist_max_workers")
             with col2:
                 output_folder = st.text_input("Output Folder", value="stocks_historical_data", key="hist_output_folder")
-                interval_minutes = st.number_input("Interval (mins)", min_value=1, max_value=1440, value=5, key="hist_interval_mins")
+                interval = st.selectbox("Interval", ["1minute", "5minute", "15minute", "1hour", "1day"], 
+                                      index=1, key="hist_interval")
             
             if st.button("▶️ Run Historical Data Download", key="hist_data"):
                 with st.spinner("📥 Downloading historical data..."):
                     try:
                         kite = TradingSystem.get_kite_instance()
                         
-                        # Convert date picker to datetime.datetime format
-                        start_datetime = datetime.combine(start_date, datetime.min.time())
+                        # Calculate start date
+                        start_datetime = datetime.now() - timedelta(days=days_back)
                         
-                        # Convert minutes to interval string format
-                        interval_str = f"{interval_minutes}minute"
-                        
+                        # Call the fixed function with correct parameters
                         success, message = TradingSystem.run_individual_function(
                             'historical_data_download', 
                             'download_historical_data', 
@@ -1267,120 +1284,19 @@ def main():
                             symbol_names_file=symbol_file,
                             output_folder=output_folder,
                             start=start_datetime,
-                            interval=interval_str,
+                            interval=interval,
                             max_workers=max_workers
                         )
+                        
                         if success:
                             st.success(message)
                             st.session_state.last_function_run = "Historical Data Download"
                         else:
                             st.error(message)
+                            
                     except Exception as e:
                         st.error(f"❌ Error: {e}")
-        
-        # Data Aggregation
-        with st.expander("📊 Data Aggregation", expanded=False):
-            st.markdown("""
-            <div class="function-card">
-            <strong>Function:</strong> data_aggregate.interactive_aggregation()<br/>
-            <strong>Purpose:</strong> Aggregates historical data with volume boost analysis<br/>
-            <strong>Output:</strong> Files in aggregated_data/ folder
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                interval_minutes = st.number_input("Interval Minutes", 0, 60, 0, key="agg_min")
-            with col2:
-                interval_days = st.number_input("Interval Days", 1, 30, 1, key="agg_days")
-            with col3:
-                input_folder = st.text_input("Input Folder", "stocks_historical_data", key="agg_folder")
-            
-            if st.button("▶️ Run Data Aggregation", key="data_agg"):
-                with st.spinner("📋 Aggregating data..."):
-                    success, message = TradingSystem.run_individual_function(
-                        'data_aggregate', 
-                        'interactive_aggregation',
-                        interval_minutes=interval_minutes,
-                        interval_days=interval_days,
-                        input_folder=input_folder,
-                        save_files=True
-                    )
-                    if success:
-                        st.success(message)
-                        st.session_state.last_function_run = "Data Aggregation"
-                    else:
-                        st.error(message)
-        
-        # Backtest
-        with st.expander("🧪 Backtest Analysis", expanded=False):
-            st.markdown("""
-            <div class="function-card">
-            <strong>Function:</strong> long_term_backtest.run_backtest()<br/>
-            <strong>Purpose:</strong> Runs backtesting on aggregated data<br/>
-            <strong>Output:</strong> Backtest results and performance metrics
-            </div>
-            """, unsafe_allow_html=True)
-            
-            if st.button("▶️ Run Backtest", key="backtest"):
-                with st.spinner("🧪 Running backtest..."):
-                    success, message = TradingSystem.run_individual_function(
-                        'long_term_backtest', 
-                        'run_backtest'
-                    )
-                    if success:
-                        st.success(message)
-                        st.session_state.last_function_run = "Backtest"
-                    else:
-                        st.error(message)
-        
-        # Consolidated Volume
-        with st.expander("🔍 Consolidated Volume Analysis", expanded=False):
-            st.markdown("""
-            <div class="function-card">
-            <strong>Function:</strong> consolidated_volume.complete_trading_workflow()<br/>
-            <strong>Purpose:</strong> Consolidates data and runs live market scanning<br/>
-            <strong>Output:</strong> Consolidated data + Telegram signals (if configured)
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                cv_interval_minutes = st.number_input("Interval Minutes", 0, 60, 0, key="cv_min")
-            with col2:
-                cv_interval_days = st.number_input("Interval Days", 1, 30, 1, key="cv_days")
-            with col3:
-                enable_telegram = st.checkbox("Enable Telegram", value=True, key="enable_tg")
-            
-            if st.button("▶️ Run Consolidated Volume", key="cons_vol"):
-                with st.spinner("🔍 Running consolidated volume analysis..."):
-                    try:
-                        kite = TradingSystem.get_kite_instance()
-                        kwargs = {
-                            'interval_minutes': cv_interval_minutes,
-                            'interval_days': cv_interval_days,
-                            'kite_instance': kite
-                        }
-                        
-                        if enable_telegram:
-                            kwargs.update({
-                                'telegram_bot_token': os.getenv('TELEGRAM_BOT_TOKEN'),
-                                'telegram_chat_id': os.getenv('TELEGRAM_CHAT_ID')
-                            })
-                        
-                        success, message = TradingSystem.run_individual_function(
-                            'consolidated_volume', 
-                            'complete_trading_workflow',
-                            **kwargs
-                        )
-                        if success:
-                            st.success(message)
-                            st.session_state.last_function_run = "Consolidated Volume"
-                        else:
-                            st.error(message)
-                    except Exception as e:
-                        st.error(f"❌ Error: {e}")
-        
+
         # Volume Average Analysis - Updated
         with st.expander("📊 Volume Average Analysis", expanded=False):
             st.markdown("""
@@ -1920,195 +1836,6 @@ def main():
 
         st.markdown("---")
         
-        # Section 4: Live Analysis
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.header("📊 Live Trading Signals")
-        with col2:
-            if st.button("🔄 Scan Now", key="scan_signals"):
-                with st.spinner("🔍 Scanning for live signals..."):
-                    signals, status_msg = LiveAnalysis.get_live_signals()
-                    
-                    # Display status
-                    if "✅" in status_msg:
-                        st.success(status_msg)
-                    elif "❌" in status_msg:
-                        st.error(status_msg)
-                    elif "⚠️" in status_msg:
-                        st.warning(status_msg)
-                    else:
-                        st.info(status_msg)
-                    
-                    # Store new signals
-                    if signals:
-                        existing_timestamps = {s.get('timestamp', '') for s in st.session_state.analysis_signals}
-                        new_signals_added = 0
-                        
-                        for signal in signals:
-                            if signal.get('timestamp') not in existing_timestamps:
-                                st.session_state.analysis_signals.append(signal)
-                                new_signals_added += 1
-                        
-                        # Keep last 100 signals
-                        st.session_state.analysis_signals = st.session_state.analysis_signals[-100:]
-                        
-                        if new_signals_added > 0:
-                            st.success(f"✅ {new_signals_added} new signals detected!")
-                        else:
-                            st.info("ℹ️ No new signals (same as previous scan)")
-                    else:
-                        st.session_state.analysis_signals = []
-                    st.rerun()
-        
-        # Display signals in table format with filters
-        if st.session_state.analysis_signals:
-            all_signals = st.session_state.analysis_signals
-            
-            st.markdown(f"**📈 Live Trading Signals** *(Total: {len(all_signals)} signals)*")
-            
-            # Add filter controls
-            col1, col2, col3 = st.columns([1, 1, 2])
-            with col1:
-                max_increase = st.number_input(
-                    "Max Increase % Filter", 
-                    min_value=0.0, 
-                    max_value=100.0, 
-                    value=100.0, 
-                    step=0.1,
-                    key="max_increase_signals",
-                    help="Show only signals with increase % less than or equal to this value"
-                )
-            with col2:
-                min_increase = st.number_input(
-                    "Min Increase % Filter", 
-                    min_value=0.0, 
-                    max_value=100.0, 
-                    value=0.0, 
-                    step=0.1,
-                    key="min_increase_signals",
-                    help="Show only signals with increase % greater than or equal to this value"
-                )
-            with col3:
-                st.markdown("**Filter Examples:**")
-                st.markdown("• Max 5% = Show signals ≤ 5%")
-                st.markdown("• Min 2% + Max 10% = Show 2% to 10%")
-            
-            # Convert signals to DataFrame for table display
-            signal_data = []
-            for signal in reversed(all_signals):
-                increase_val = signal['increase']
-                
-                # Apply filters
-                if min_increase <= increase_val <= max_increase:
-                    signal_data.append({
-                        'Symbol': signal['symbol'],
-                        'CSV Date': signal['csv_date'],
-                        'OHLC Type': signal['ohlc_type'],
-                        'CSV Price': signal['csv_price'],  # Keep as number for sorting
-                        'Live Price': signal['live_price'],  # Keep as number for sorting
-                        'Increase %': increase_val,  # Keep as number for sorting
-                        'Time': signal['current_time'],
-                        'Volume': signal.get('volume', 'N/A'),
-                        'Timestamp': signal.get('timestamp', '')
-                    })
-            
-            if signal_data:
-                # Create DataFrame
-                df_signals = pd.DataFrame(signal_data)
-                
-                # Display filtered count
-                st.markdown(f"### 🎯 Active Signals ({len(signal_data)})")
-                
-                # Configure column widths and styling with proper number formatting
-                st.dataframe(
-                    df_signals,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=600,  # Set fixed height for better pagination
-                    column_config={
-                        "Symbol": st.column_config.TextColumn("Symbol", width="small"),
-                        "CSV Date": st.column_config.TextColumn("CSV Date", width="medium"),
-                        "OHLC Type": st.column_config.TextColumn("OHLC", width="small"),
-                        "CSV Price": st.column_config.NumberColumn(
-                            "CSV Price (₹)", 
-                            width="small",
-                            format="₹%.2f"
-                        ),
-                        "Live Price": st.column_config.NumberColumn(
-                            "Live Price (₹)", 
-                            width="small",
-                            format="₹%.2f"
-                        ),
-                        "Increase %": st.column_config.NumberColumn(
-                            "Increase %", 
-                            width="small",
-                            format="%.2f%%"
-                        ),
-                        "Time": st.column_config.TextColumn("Time", width="small"),
-                        "Volume": st.column_config.TextColumn("Volume", width="small"),
-                        "Timestamp": None  # Hide timestamp column from display
-                    }
-                )
-                
-                # Excel Download Section
-                st.markdown("### 📥 Export Options")
-                col1, col2, col3 = st.columns([1, 1, 2])
-                
-                with col1:
-                    # Download as Excel (filtered data)
-                    try:
-                        import io
-                        
-                        # Create Excel file in memory with filtered data
-                        output = io.BytesIO()
-                        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                            # Use the already filtered df_signals for Excel export
-                            df_excel = df_signals.copy()
-                            df_excel.to_excel(writer, sheet_name='Trading_Signals_Filtered', index=False)
-                        
-                        excel_data = output.getvalue()
-                        
-                        st.download_button(
-                            label="📊 Download Excel (Filtered)",
-                            data=excel_data,
-                            file_name=f"trading_signals_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        )
-                    except ImportError:
-                        st.error("📋 Install openpyxl: pip install openpyxl")
-                
-                with col2:
-                    # Download as CSV (filtered data)
-                    csv_data = df_signals.to_csv(index=False)
-                    st.download_button(
-                        label="📋 Download CSV (Filtered)",
-                        data=csv_data,
-                        file_name=f"trading_signals_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                        mime="text/csv"
-                    )
-                
-                with col3:
-                    st.info(f"📈 **{len(signal_data)} filtered signals** | Last updated: {datetime.now().strftime('%H:%M:%S')}")
-            
-            else:
-                st.warning(f"🔍 No signals found with increase between {min_increase}% and {max_increase}%")
-                st.info(f"Total signals available: {len(all_signals)}")
-                if st.button("🔄 Reset Filters", key="reset_signal_filters"):
-                    st.rerun()
-        else:
-            st.info("📊 No active signals. Click 'Scan Now' to check for trading opportunities.")
-            st.markdown("""
-            **How signals work:**
-            - Compares live market prices with baseline data
-            - Shows symbols where live price > baseline price  
-            - Baseline source: Volume_boost_consolidated/consolidated_data.csv
-            - Requires valid Kite token and market hours
-            - **📊 Table format** with sortable columns
-            - **🔽 Filter** by increase percentage (min/max)
-            - **📋 Export** to Excel/CSV with filtered data
-            - **📈 Real-time** number formatting for prices
-            """)
-
     else:
         st.warning("🔐 Please authenticate with Kite Connect to access trading features")
         st.info("Use the sidebar to generate your authentication token")

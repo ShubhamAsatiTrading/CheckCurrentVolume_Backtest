@@ -3,7 +3,7 @@
 .\trade_venv\Scripts\activate
 
 python main.py --- for running full code
-
+python login.py
 python clean_scraper.py --- to run only scraping
 
 
