@@ -1,0 +1,18 @@
+https://kite.zerodha.com/connect/login?api_key=gl0qvjm9s81w22cf&v=3
+
+
+backtest_metrics = {
+    'win_rate': 'Percentage of profitable trades',
+    'avg_win_loss': 'Average win / Average loss',
+    'max_drawdown': 'Maximum consecutive loss',
+    'sharpe_ratio': 'Risk-adjusted returns',
+    'profit_factor': 'Gross profit / Gross loss'
+}
+
+.\trade_venv\Scripts\activate
+
+
+
+python main.py --- for running full code
+
+python clean_scraper.py --- to run only scraping

@@ -1,0 +1,16 @@
+.env
+.env.template
+_pycache_/
+
+aggregated_data/
+aggregated_data_copy/
+backtest_results/
+charts/
+stocks_historical_data/
+stocks_historical_data_copy/
+trade_venv/
+.streamlit/
+common.txt
+symbols.txt
+kite_login.txt
+Volume_Avg_Data/
