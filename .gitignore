@@ -14,3 +14,5 @@ common.txt
 symbols.txt
 kite_login.txt
 Volume_Avg_Data/
+backtest_result_live_volume_boost/
+vol_avg_data_backtest/

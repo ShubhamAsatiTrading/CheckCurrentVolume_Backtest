@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 
 def download_historical_data(kite, symbol_names_file="symbols.txt", output_folder="stocks_historical_data", 
-                           start=None, interval="5minute", max_workers=3):
+                           start=None, interval="1minute", max_workers=3):
     """
     Core function to download historical data - NO STREAMLIT CODE
     
@@ -17,7 +17,7 @@ def download_historical_data(kite, symbol_names_file="symbols.txt", output_folde
         symbol_names_file: File containing stock symbols
         output_folder: Directory to save data
         start: Start date for historical data
-        interval: Data interval (e.g., "5minute", "1hour")
+        interval: Data interval (e.g., "1minute", "1hour")
         max_workers: Number of parallel workers
     
     Returns:
@@ -96,7 +96,7 @@ def download_historical_data(kite, symbol_names_file="symbols.txt", output_folde
         return False, error_msg
 
 def download_historical_data_simple(kite, symbols_list=None, output_folder="stocks_historical_data", 
-                                  days_back=365, interval="5minute"):
+                                  days_back=365, interval="minute"):
     """
     Simplified version for direct calls from main.py
     
@@ -160,7 +160,7 @@ if __name__ == "__main__":
         symbol_file = st.text_input("Symbol File", value="symbols.txt")
         output_folder = st.text_input("Output Folder", value="stocks_historical_data")
         days_back = st.number_input("Days Back", min_value=1, max_value=3650, value=365)
-        interval = st.selectbox("Interval", ["1minute", "5minute", "15minute", "1hour", "1day"])
+        interval = st.selectbox("Interval", ["minute", "5minute", "15minute", "hour", "day"])
         max_workers = st.number_input("Max Workers", min_value=1, max_value=10, value=3)
         
         submitted = st.form_submit_button("Start Download")
